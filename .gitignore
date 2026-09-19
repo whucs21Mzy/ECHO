@@ -1,0 +1,47 @@
+*.DS_Store
+*.idx
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions (rebuild with pip install -e ./echo/automaton)
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Environments / editors
+.env
+.venv
+env/
+venv/
+ENV/
+.idea/
+.vscode/
+
+# Eval dumps
+data/*/model_answer/*.jsonl
+data/*/model_answer/*.bottleneck.jsonl
+*.log
+
+# Cython
+cython_debug/
