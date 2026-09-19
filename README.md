@@ -53,8 +53,6 @@ huggingface-cli download facebook/layerskip-llama3-8B \
   --local-dir ./checkpoints/layerskip-llama3-8B
 ```
 
-Point `--model-path` at the local directory. Official LayerSkip checkpoints are continued pretrain on **base** models, not Instruct.
-
 ### 2. Environment
 
 Python 3.10, CUDA 11.8 (`torch==2.7.1+cu118`). System `g++` is required to build the automaton.
