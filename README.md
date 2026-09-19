@@ -1,8 +1,15 @@
-# ECHO
+<div align="center">
+
+# 🚀 ECHO
 
 **Early-layer Collaborative Hierarchical Orchestration with Bonus Logits in Speculative Decoding**
 
-Code for our **EMNLP 2026** paper · [arXiv:2609.17241](https://arxiv.org/abs/2609.17241)
+[![arXiv](https://img.shields.io/badge/arXiv-2609.17241-b31b1b.svg)](https://arxiv.org/abs/2609.17241)
+[![Python](https://img.shields.io/badge/Python-3.10-blue.svg)]()
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.7.1-EE4C2C.svg)]()
+[![Venue](https://img.shields.io/badge/Venue-EMNLP%202026-4b44ce.svg)]()
+
+</div>
 
 This codebase is based on [RACER](https://github.com/hkr04/RACER). Experiments use official [LayerSkip](https://github.com/facebookresearch/LayerSkip) weights.
 
@@ -11,7 +18,7 @@ This codebase is based on [RACER](https://github.com/hkr04/RACER). Experiments u
 - [RACER](https://github.com/hkr04/RACER)
 - [LayerSkip](https://github.com/facebookresearch/LayerSkip)
 
-## Method
+## Overview
 
 <p align="center">
   <img src="assets/method.png" alt="ECHO overview" width="92%"/>
