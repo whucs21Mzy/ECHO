@@ -129,11 +129,36 @@ protected:
     }
 
     // RACER Appendix E.3, Algorithm 3: LRU node recycle/reset
-    TrieNode* get_new_node() {
+    TrieNode* get_new_node(TrieNode* active_parent = nullptr) {
         // RACER Sec. 3.2 / Appendix E.3, Algorithm 3:
-        // prefix touching preserves the leaf-only LRU eviction invariant.
-        assert(lru_list.back()->children.empty());
-        TrieNode* node = lru_list.back();
+        // Prefix touching normally leaves an evictable leaf at the LRU tail,
+        // but long-lived automata can retain an internal node there after
+        // failure-link rebuilds.  Search backward for the least-recently-used
+        // safe leaf instead of aborting the whole inference process.
+        auto victim = lru_list.end();
+        if (root == nullptr) {
+            victim = std::prev(lru_list.end()); // Initial root allocation.
+        } else {
+            for (auto it = lru_list.end(); it != lru_list.begin();) {
+                --it;
+                TrieNode* candidate = *it;
+                if (
+                    candidate != root
+                    && candidate != _cur_state
+                    && candidate != active_parent
+                    && candidate->children.empty()
+                ) {
+                    victim = it;
+                    break;
+                }
+            }
+        }
+        if (victim == lru_list.end()) {
+            throw std::runtime_error(
+                "automaton capacity exhausted with no safely evictable leaf"
+            );
+        }
+        TrieNode* node = *victim;
         if (node->parent) {
             auto it = node->parent->children.find(node->token);
             if (it != node->parent->children.end() && it->second == node) {
@@ -222,7 +247,7 @@ public:
         for (int token : pattern) {
             touch(u); // Touch the current node
             if (!u->children.count(token)) {
-                TrieNode* new_node = get_new_node();
+                TrieNode* new_node = get_new_node(u);
                 new_node->parent = u;
                 new_node->token = token;
                 new_node->depth = u->depth + 1;

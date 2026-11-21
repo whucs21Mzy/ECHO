@@ -32,6 +32,7 @@ MANIFEST
 # Environments / editors
 .env
 .venv
+.venv-*/
 env/
 venv/
 ENV/
@@ -42,6 +43,8 @@ ENV/
 data/*/model_answer/*.jsonl
 data/*/model_answer/*.bottleneck.jsonl
 *.log
+outputs/
+checkpoints/
 
 # Cython
 cython_debug/
