@@ -1,4 +1,4 @@
-"""Register recurrent model families and initialize an eager SGLang runner."""
+"""Register ECHO model families and initialize an eager SGLang runner."""
 
 import json
 import os
@@ -20,6 +20,7 @@ def _register_model():
         register_model_config_parser,
     )
     from sglang.srt.models.registry import ModelRegistry
+    from transformers import LlamaConfig
 
     from echo.sglang.models.ouro import EchoOuroConfig
     from echo.sglang.models.raven import EchoRavenConfig
@@ -39,9 +40,12 @@ def _register_model():
             elif data.get("model_type") == "huginn_raven":
                 config = EchoRavenConfig.from_dict(data)
                 config.architectures = ["EchoRavenForCausalLM"]
+            elif data.get("model_type") == "llama":
+                config = LlamaConfig.from_dict(data)
+                config.architectures = ["EchoLlamaForCausalLM"]
             else:
                 raise ValueError(
-                    "ECHO's recurrent SGLang backend supports Ouro and Raven checkpoints"
+                    "ECHO's SGLang backend supports Llama, Ouro, and Raven checkpoints"
                 )
             config._name_or_path = str(model)
             return config
@@ -140,6 +144,10 @@ def load_runner(
 
 
 def _configure_pointwise(model, torch_dtype):
+    # Ordinary LayerSkip Llama uses SGLang's fused CUDA kernels. The native
+    # fallbacks below preserve recurrent-checkpoint arithmetic and FP32 checks.
+    if model.config.model_type == "llama" and torch_dtype != torch.float32:
+        return
     if model.config.model_type == "huginn_raven":
         from sglang.srt.layers.layernorm import RMSNorm
 

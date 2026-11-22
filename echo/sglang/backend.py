@@ -1,4 +1,4 @@
-"""Recurrent execution on SGLang; family classes define state and KV roles."""
+"""Split execution on SGLang; family classes define state and KV roles."""
 
 from abc import ABC, abstractmethod
 
@@ -97,6 +97,7 @@ class SGLangLoopedBackend(ABC):
         hidden_states=None,
         tree_mask=None,
         fill_shallow=True,
+        last_logits_only=False,
     ):
         from sglang.srt.model_executor.forward_context import (
             ForwardContext,
@@ -136,12 +137,14 @@ class SGLangLoopedBackend(ABC):
                 None if hidden_states is None else hidden_states.reshape(width, -1),
                 fill_shallow,
             )
-            logits = self.model.all_logits(head, batch)
+            logits = self.model.all_logits(head[-1:] if last_logits_only else head, batch)
         for offset, count in ranges:
             cache.lengths[offset : offset + count] = [prefix + width] * count
         return LoopedForwardOutput(state[None], logits[None])
 
-    def prefill(self, input_ids, cache=None, *, fill_shallow=True):
+    def prefill(
+        self, input_ids, cache=None, *, fill_shallow=True, last_logits_only=False
+    ):
         cache = self.new_cache() if cache is None else cache
         result = self.forward_steps(
             step_start=0,
@@ -150,6 +153,7 @@ class SGLangLoopedBackend(ABC):
             position_ids=torch.arange(input_ids.numel(), device=self.device),
             input_ids=input_ids,
             fill_shallow=fill_shallow,
+            last_logits_only=last_logits_only,
         )
         return cache, result
 
@@ -200,6 +204,41 @@ class SGLangLoopedBackend(ABC):
     def forward_ar_token_ids(self, input_ids, prefix_length, cache):
         return self.forward_token_ids(
             input_ids, prefix_length, cache, fill_shallow=False
+        )
+
+
+class LayerSkipSGLangBackend(SGLangLoopedBackend):
+    """Split the ordinary Llama layer stack without rerunning early layers."""
+
+    @property
+    def shallow_slot_end(self):
+        return self.shallow_steps
+
+    @property
+    def num_cache_slots(self):
+        return self.total_steps
+
+    def prefill_ar(self, input_ids, cache=None):
+        return self.prefill(
+            input_ids,
+            cache=cache,
+            fill_shallow=False,
+            last_logits_only=True,
+        )
+
+    def _cache_ranges(self, step_start, step_end, *, from_tokens, fill_shallow):
+        return [(step_start, step_end - step_start)]
+
+    def _execute_steps(
+        self, positions, batch, step_start, step_end, ids, hidden, fill_shallow
+    ):
+        return self.model.forward_hidden_steps(
+            positions,
+            batch,
+            step_start=step_start,
+            step_end=step_end,
+            input_ids=ids,
+            hidden_states=hidden,
         )
 
 

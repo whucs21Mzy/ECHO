@@ -112,9 +112,9 @@ def summarize(records, methods):
     return result
 
 
-def main():
+def main(*, default_backend="torch"):
     parser = argparse.ArgumentParser(description=__doc__)
-    add_model_arguments(parser)
+    add_model_arguments(parser, default_backend=default_backend)
     parser.add_argument("--mode", choices=("paired", "echo", "ar"), default="paired")
     parser.add_argument(
         "--input-file",

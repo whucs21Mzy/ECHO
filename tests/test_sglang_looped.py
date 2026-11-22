@@ -30,6 +30,61 @@ class SGLangLoopedEchoTest(unittest.TestCase):
             torch.distributed.destroy_process_group()
 
     @torch.inference_mode()
+    def test_full_layer_stack_matches_native_llama_forward(self):
+        backend = self.backend
+        if backend.config.model_type != "llama":
+            self.skipTest("Independent native Llama control")
+        from sglang.srt.model_executor.forward_context import ForwardContext, forward_context
+
+        from echo.sglang.ops.tree_attention import make_forward_batch
+
+        prefix = torch.tensor([[2, 5, 7]], device=backend.device)
+        cache, actual = backend.prefill(prefix)
+        reference = backend.new_cache()
+        try:
+            positions = torch.arange(prefix.numel(), device=backend.device)
+            batch = make_forward_batch(
+                backend, reference, 0, prefix.reshape(-1), positions, None
+            )
+            with forward_context(ForwardContext(attn_backend=batch.attn_backend)):
+                hidden = backend.model.model(prefix.reshape(-1), positions, batch)
+                expected = backend.model.all_logits(hidden, batch)
+            torch.testing.assert_close(actual.logits[0], expected, atol=1e-5, rtol=1e-5)
+        finally:
+            reference.close()
+            cache.close()
+
+    @torch.inference_mode()
+    def test_layerskip_ar_prefill_projects_only_the_final_position(self):
+        if self.backend.config.model_type != "llama":
+            self.skipTest("LayerSkip AR prefill")
+        prefix = torch.tensor([[2, 5, 7]], device=self.backend.device)
+        cache, full = self.backend.prefill(prefix)
+        ar_cache, actual = self.backend.prefill_ar(prefix)
+        try:
+            self.assertEqual(actual.logits.shape, full.logits[:, -1:].shape)
+            torch.testing.assert_close(actual.logits, full.logits[:, -1:], atol=1e-4, rtol=1e-4)
+            cache.assert_lengths(3, 0, self.backend.num_cache_slots)
+            ar_cache.assert_lengths(3, 0, self.backend.num_cache_slots)
+        finally:
+            ar_cache.close()
+            cache.close()
+
+    @torch.inference_mode()
+    def test_logits_match_independent_hf_reference(self):
+        path = os.environ.get("ECHO_TEST_HF_REFERENCE")
+        if not path or self.backend.config.model_type != "llama":
+            self.skipTest("set ECHO_TEST_HF_REFERENCE to a saved input_ids/logits pair")
+        reference = torch.load(path, map_location="cpu", weights_only=True)
+        cache, actual = self.backend.prefill(reference["input_ids"].to(self.backend.device))
+        try:
+            expected = reference["logits"].to(actual.logits.device)
+            torch.testing.assert_close(actual.logits, expected, atol=1e-4, rtol=1e-4)
+            self.assertTrue(torch.equal(actual.logits.argmax(-1), expected.argmax(-1)))
+        finally:
+            cache.close()
+
+    @torch.inference_mode()
     def test_tree_branches_compaction_and_deep_continuation_match_causal_model(self):
         backend = self.backend
         pool = backend.runner.req_to_token_pool

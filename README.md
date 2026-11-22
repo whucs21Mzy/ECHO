@@ -12,14 +12,13 @@ Speculative decoding for LayerSkip, looped transformers, and recurrent language 
 
 </div>
 
-ECHO implements speculative decoding for LayerSkip models and looped/recurrent
-transformers. It verifies draft trees with early layers or early recurrent
-iterations, then reuses those states to complete final verification.
+ECHO implements speculative decoding in PyTorch and SGLang for LayerSkip and
+looped/recurrent transformers, including Ouro, Huginn, recurrent Llama,
+TinyLlama, and OLMo. It verifies draft trees with early layers or recurrent
+iterations, then reuses those states for final verification.
 
-LayerSkip inference runs on PyTorch. The looped/recurrent implementation
-supports Ouro, Huginn, recurrent Llama, TinyLlama, and OLMo on PyTorch and
-SGLang. Both implementations include AR baselines and evaluation of
-throughput, mean accepted tokens (MAT), and speedup.
+Paired AR/ECHO benchmarks report throughput, mean accepted tokens (MAT),
+and speedup.
 
 ## News
 
@@ -37,9 +36,9 @@ This codebase is based on [RACER](https://github.com/hkr04/RACER). Experiments u
 
 Draft-model-free speculative decoding is cheap to deploy, but it hits two walls. **Verification** still runs the full target stack on every draft, so cost barely falls when drafts are wrong (the *verification wall*). **Drafts** themselves are often stale: if bonus logits come only from the last layer, they refresh only after a full forward pass, and acceptance decays quickly with depth.
 
-ECHO’s claim is that **LayerSkip-style early-exit SFT** changes this asymmetry. After that one-shot fine-tune, shallow layers can already score candidates well enough to **take over most of the verification load**, so the deep stack is invoked much less often. The same early layers also emit **early bonus logits**—distributions that already contain substantial *future* context, not just the next token. Feeding those logits into the retrieval automaton updates drafts at high frequency and with higher quality, instead of waiting for a last-layer refresh.
+ECHO uses early layers or recurrent iterations to verify draft trees, reducing how often final verification runs. These stages also produce early bonus logits that predict upcoming tokens and refresh the retrieval automaton during drafting.
 
-Remaining layers stay the authority: they confirm what early layers accepted and supply a final bonus to re-anchor the next cycle. No extra draft model or deployment heads are added; the speedup (about \(2.4\times\)–\(2.9\times\) in the paper) comes from using LayerSkip’s early-exit capacity for verification sharing and for richer, faster automaton updates.
+The remaining layers or iterations confirm the accepted block and supply final bonus logits for the next cycle. ECHO uses a single target model and its existing output head. The paper reports speedups of about \(2.4\times\)–\(2.9\times\) on LayerSkip checkpoints.
 
 See the [paper](https://arxiv.org/pdf/2609.17241) for details.
 
@@ -48,8 +47,8 @@ See the [paper](https://arxiv.org/pdf/2609.17241) for details.
 ### Looped transformers
 
 ECHO uses the first K recurrent iterations for early verification and the
-remaining iterations for final verification. Both backends support these
-six checkpoints:
+remaining iterations for final verification. The six checkpoints use these
+recurrent schedules:
 
 | Model | Full recurrence S | Early readout K |
 | --- | ---: | ---: |
@@ -133,6 +132,24 @@ definitions, the Python API, single-prompt generation, and tests.
 
 ### LayerSkip
 
+Use the SGLang environment above for generation and paired evaluation:
+
+```bash
+# Single prompt
+CUDA_VISIBLE_DEVICES=0 .venv-looped-sglang/bin/python -m evaluation.inference_layerskip \
+  --model-path ./checkpoints/layerskip-llama3-8B --intermediate-layer 10 \
+  --prompt '<|begin_of_text|>The capital of France is' --max-new-tokens 64
+
+# Paired AR/ECHO benchmark
+CUDA_VISIBLE_DEVICES=0 .venv-looped-sglang/bin/python -m evaluation.benchmark_layerskip \
+  --model-path ./checkpoints/layerskip-llama3-8B --intermediate-layer 10 \
+  --mode paired --input-file ./prompts.jsonl \
+  --output-file ./outputs/layerskip-sglang.jsonl
+```
+
+See [LayerSkip on SGLang](docs/layerskip_sglang.md) for input formatting,
+metrics, and correctness checks.
+
 #### 1. Download LayerSkip weights
 
 Checkpoints are in the Hugging Face collection [facebook/layerskip](https://huggingface.co/collections/facebook/layerskip) (gated, FAIR non-commercial license). Request access, then log in:
@@ -157,7 +174,7 @@ huggingface-cli download facebook/layerskip-llama3-8B \
 
 #### 2. Environment
 
-Python 3.10, CUDA 11.8 (`torch==2.7.1+cu118`). System `g++` is required to build the automaton.
+For Torch, use Python 3.10 and CUDA 11.8 (`torch==2.7.1+cu118`). System `g++` is required to build the automaton.
 
 ```bash
 conda create -n echo python=3.10 -y

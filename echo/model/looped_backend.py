@@ -1,4 +1,4 @@
-"""Model-family dispatch for independent Torch and SGLang ECHO execution."""
+"""Model-family dispatch for Torch and native SGLang ECHO execution."""
 
 import json
 from pathlib import Path
@@ -18,10 +18,16 @@ def load_looped_tokenizer(model_path, *, backend="torch"):
             from echo.sglang.models.raven import EchoRavenConfig
 
             config = EchoRavenConfig.from_dict(data)
-        else:
+        elif data.get("model_type") == "ouro":
             from echo.sglang.models.ouro import EchoOuroConfig
 
             config = EchoOuroConfig.from_dict(data)
+        elif data.get("model_type") == "llama":
+            from transformers import LlamaConfig
+
+            config = LlamaConfig.from_dict(data)
+        else:
+            raise ValueError(f"Unsupported ECHO model type: {data.get('model_type')!r}")
         config._name_or_path = str(model_path)
         options["config"] = config
     return AutoTokenizer.from_pretrained(
@@ -43,13 +49,30 @@ def load_looped_backend(
     mem_fraction_static=None,
     attn_implementation="sdpa",
 ):
-    kind = json.loads((Path(model_path) / "config.json").read_text()).get("model_type")
-    if kind not in {"ouro", "huginn_raven"}:
-        raise ValueError(f"Unsupported recurrent model type: {kind!r}")
+    config = json.loads((Path(model_path) / "config.json").read_text())
+    kind = config.get("model_type")
+    if kind not in {"ouro", "huginn_raven", "llama"}:
+        raise ValueError(f"Unsupported ECHO model type: {kind!r}")
+    if kind == "llama":
+        if backend != "sglang":
+            raise ValueError(
+                "LayerSkip uses the SGLang entry point here; "
+                "for Torch use evaluation/inference_echo.py"
+            )
+        if not 0 < shallow_steps < config["num_hidden_layers"]:
+            raise ValueError("The early-exit layer must precede the final Llama layer")
     if backend == "sglang":
-        from echo.sglang.backend import OuroSGLangBackend, RavenSGLangBackend
+        from echo.sglang.backend import (
+            LayerSkipSGLangBackend,
+            OuroSGLangBackend,
+            RavenSGLangBackend,
+        )
 
-        cls = OuroSGLangBackend if kind == "ouro" else RavenSGLangBackend
+        cls = {
+            "llama": LayerSkipSGLangBackend,
+            "ouro": OuroSGLangBackend,
+            "huginn_raven": RavenSGLangBackend,
+        }[kind]
         return cls.from_pretrained(
             model_path,
             shallow_steps=shallow_steps,

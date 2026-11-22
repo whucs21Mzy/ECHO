@@ -14,9 +14,9 @@ from .looped_common import (
 )
 
 
-def main():
+def main(*, default_backend="torch"):
     parser = argparse.ArgumentParser(description=__doc__)
-    add_model_arguments(parser)
+    add_model_arguments(parser, default_backend=default_backend)
     parser.add_argument("--mode", choices=("echo", "ar"), default="echo")
     parser.add_argument(
         "--prompt",

@@ -9,14 +9,15 @@ from dataclasses import asdict
 from pathlib import Path
 
 
-def add_model_arguments(parser):
+def add_model_arguments(parser, *, default_backend="torch"):
     parser.add_argument("--model-path", type=Path, required=True)
-    parser.add_argument("--backend", choices=("torch", "sglang"), default="torch")
+    parser.add_argument("--backend", choices=("torch", "sglang"), default=default_backend)
     parser.add_argument(
         "--shallow-steps",
+        "--intermediate-layer",
         type=int,
         required=True,
-        help="Early readout after K recurrent iterations",
+        help="Early readout after K recurrent iterations or L LayerSkip layers",
     )
     parser.add_argument("--max-new-tokens", type=int, default=1024)
     parser.add_argument("--context-length", type=int, default=2048)
